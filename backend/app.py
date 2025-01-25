@@ -29,17 +29,21 @@ def extract_text_from_pdf(pdf_file):
     return text
 
 def load_documents():
-    # Load both PDF and CSV documents
-    pdf_path = os.path.join(os.path.dirname(__file__), 'quicklinks.pdf')
-    csv_path = os.path.join(os.path.dirname(__file__), 'placement_details_complete.csv')
+    try:
+        # Load both PDF and CSV documents
+        pdf_path = os.path.join(os.path.dirname(__file__), 'quicklinks.pdf')
+        csv_path = os.path.join(os.path.dirname(__file__), 'placement_details_complete.csv')
 
-    pdf_loader = PyPDFLoader(pdf_path)
-    csv_loader = CSVLoader(file_path=csv_path)
+        pdf_loader = PyPDFLoader(pdf_path)
+        csv_loader = CSVLoader(file_path=csv_path)
 
-    pdf_documents = pdf_loader.load()
-    csv_documents = csv_loader.load()
+        pdf_documents = pdf_loader.load()
+        csv_documents = csv_loader.load()
 
-    return pdf_documents + csv_documents
+        return pdf_documents + csv_documents
+    except Exception as e:
+        print(f"Error loading documents: {str(e)}")
+        return []
 
 def initialize_embeddings():
     try:
@@ -52,7 +56,6 @@ def initialize_embeddings():
         return None
 
 def initialize_chat_model():
-    """Initialize and return the chat model with Google's Generative AI."""
     try:
         safety_settings = {
             HarmCategory.DANGEROUS_CONTENT: HarmBlockThreshold.MEDIUM,
@@ -72,14 +75,18 @@ def initialize_chat_model():
         return None
 
 def create_vector_store(documents, embeddings):
-    persist_directory = os.path.join(os.path.dirname(__file__), 'chroma_db_combined')
-    vectordb = Chroma.from_documents(
-        documents=documents,
-        embedding=embeddings,
-        persist_directory=persist_directory
-    )
-    vectordb.persist()
-    return vectordb
+    try:
+        persist_directory = os.path.join(os.path.dirname(__file__), 'chroma_db_combined')
+        vectordb = Chroma.from_documents(
+            documents=documents,
+            embedding=embeddings,
+            persist_directory=persist_directory
+        )
+        vectordb.persist()
+        return vectordb
+    except Exception as e:
+        print(f"Error creating vector store: {str(e)}")
+        return None
 
 def initialize_qa_chain():
     global qa_chain, chat_model
@@ -87,6 +94,8 @@ def initialize_qa_chain():
     try:
         # Load combined documents
         documents = load_documents()
+        if not documents:
+            raise Exception("No documents loaded")
 
         # Split documents into chunks
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
@@ -98,6 +107,8 @@ def initialize_qa_chain():
             raise Exception("Failed to initialize embeddings")
 
         vectordb = create_vector_store(documents=texts, embeddings=embeddings)
+        if not vectordb:
+            raise Exception("Failed to create vector store")
 
         # Create prompt template
         prompt_template = """
@@ -170,92 +181,11 @@ def chat():
         print(f"Error processing request: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
-@app.route('/match', methods=['POST'])
-def match_resume():
-    try:
-        if 'resume' not in request.files:
-            return jsonify({'error': 'No resume file provided'}), 400
-        
-        resume_file = request.files['resume']
-        job_description = request.form.get('jobDescription')
-        
-        if not job_description:
-            return jsonify({'error': 'No job description provided'}), 400
-
-        resume_text = extract_text_from_pdf(resume_file)
-        
-        matching_prompt = f"""
-        Hey Act Like a skilled or very experienced ATS. Your task is to evaluate the resume based on the given job description. 
-        Only provide the JD Match percentage as a response.
-
-        Resume: {resume_text}
-        Job Description: {job_description}
-
-        Provide response in the format:
-        {{"JD Match": "%"}}
-        """
-
-        response = chat_model.invoke(matching_prompt)
-        try:
-            match_data = json.loads(response.text)
-            match_percentage = int(match_data["JD Match"].strip("%"))
-            return jsonify({"similarity": match_percentage})
-        except:
-            return jsonify({"error": "Failed to parse AI response"}), 500
-
-    except Exception as e:
-        print(f"Error processing request: {str(e)}")
-        return jsonify({'error': 'Internal server error'}), 500
-
-@app.route('/detailed-match', methods=['POST'])
-def detailed_match():
-    try:
-        if 'resume' not in request.files:
-            return jsonify({'error': 'No resume file provided'}), 400
-        
-        resume_file = request.files['resume']
-        job_description = request.form.get('jobDescription')
-        
-        if not job_description:
-            return jsonify({'error': 'No job description provided'}), 400
-
-        resume_text = extract_text_from_pdf(resume_file)
-        
-        feedback_prompt = f"""
-        Hey Act Like a skilled or very experienced ATS. Your task is to evaluate the resume based on the given job description. 
-        Provide detailed feedback including:
-        1. JD Match (%): Assign the percentage matching based on the Job Description (JD) and the resume provided.
-        2. Missing Keywords: Identify missing keywords with high accuracy and relevance to the JD.
-        3. Profile Summary: Summarize the profile's strengths and alignment with the JD.
-        4. Strengths: Highlight the key strengths of the candidate based on the resume.
-        5. Weaknesses: Point out weaknesses or areas that need improvement based on the JD.
-        6. Recommend Courses & Resources: Suggest relevant courses or resources to improve the profile and match the JD better.
-
-        Resume: {resume_text}
-        Job Description: {job_description}
-
-        Provide the response in this format:
-        {{
-          "JD Match": "%",
-          "Missing Keywords": [],
-          "Profile Summary": "",
-          "Strengths": "",
-          "Weaknesses": "",
-          "Recommend Courses & Resources": ""
-        }}
-        """
-
-        response = chat_model.invoke(feedback_prompt)
-        try:
-            feedback_data = json.loads(response.text)
-            return jsonify(feedback_data)
-        except:
-            return jsonify({"error": "Failed to parse AI response"}), 500
-
-    except Exception as e:
-        print(f"Error processing request: {str(e)}")
-        return jsonify({'error': 'Internal server error'}), 500
-
 if __name__ == '__main__':
+    # Initialize chat model before running the app
     chat_model = initialize_chat_model()
+    if not chat_model:
+        print("Failed to initialize chat model. Exiting...")
+        exit(1)
+    
     app.run(debug=True, port=5000)
