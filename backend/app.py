@@ -22,12 +22,12 @@ chat_model = None
 
 def initialize_chat_model():
     try:
-        # Updated safety settings to be less restrictive
+        # Updated safety settings to be more permissive
         safety_settings = {
-            HarmCategory.DANGEROUS_CONTENT: HarmBlockThreshold.LOW_AND_ABOVE,
-            HarmCategory.HATE_SPEECH: HarmBlockThreshold.LOW_AND_ABOVE,
-            HarmCategory.HARASSMENT: HarmBlockThreshold.LOW_AND_ABOVE,
-            HarmCategory.SEXUALLY_EXPLICIT: HarmBlockThreshold.LOW_AND_ABOVE,
+            HarmCategory.DANGEROUS_CONTENT: HarmBlockThreshold.MEDIUM_AND_ABOVE,
+            HarmCategory.HATE_SPEECH: HarmBlockThreshold.MEDIUM_AND_ABOVE,
+            HarmCategory.HARASSMENT: HarmBlockThreshold.MEDIUM_AND_ABOVE,
+            HarmCategory.SEXUALLY_EXPLICIT: HarmBlockThreshold.MEDIUM_AND_ABOVE,
         }
         
         model = ChatGoogleGenerativeAI(
