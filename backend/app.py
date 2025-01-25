@@ -3,9 +3,9 @@ from flask_cors import CORS
 import os
 import PyPDF2 as pdf
 from langchain.prompts import PromptTemplate
-from langchain.vectorstores import Chroma
+from langchain_community.vectorstores import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.document_loaders import PyPDFLoader, CSVLoader
+from langchain_community.document_loaders import PyPDFLoader, CSVLoader
 from langchain.chains import RetrievalQA
 from langchain.retrievers.multi_query import MultiQueryRetriever
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -20,7 +20,23 @@ CORS(app)
 qa_chain = None
 chat_model = None
 
-# ... keep existing code (load_documents, initialize_embeddings, initialize_chat_model, create_vector_store, initialize_qa_chain functions)
+def initialize_chat_model():
+    """Initialize and return the chat model with Google's Generative AI."""
+    try:
+        model = ChatGoogleGenerativeAI(
+            model="gemini-pro",
+            temperature=0.7,
+            safety_settings={
+                HarmCategory.HARASSMENT: HarmBlockThreshold.MEDIUM,
+                HarmCategory.HATE_SPEECH: HarmBlockThreshold.MEDIUM,
+                HarmCategory.SEXUALLY_EXPLICIT: HarmBlockThreshold.MEDIUM,
+                HarmCategory.DANGEROUS_CONTENT: HarmBlockThreshold.MEDIUM,
+            }
+        )
+        return model
+    except Exception as e:
+        print(f"Error initializing chat model: {str(e)}")
+        return None
 
 def extract_text_from_pdf(pdf_file):
     reader = pdf.PdfReader(pdf_file)
