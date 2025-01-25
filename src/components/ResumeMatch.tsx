@@ -3,15 +3,31 @@ import { Upload, ArrowLeft, Percent } from "lucide-react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 interface ResumeMatchProps {
   onBack: () => void;
+}
+
+interface DetailedFeedback {
+  "JD Match": string;
+  "Missing Keywords": string[];
+  "Profile Summary": string;
+  "Strengths": string;
+  "Weaknesses": string;
+  "Recommend Courses & Resources": string;
 }
 
 export const ResumeMatch = ({ onBack }: ResumeMatchProps) => {
   const [resume, setResume] = useState<File | null>(null);
   const [jobDescription, setJobDescription] = useState("");
   const [similarity, setSimilarity] = useState<number | null>(null);
+  const [detailedFeedback, setDetailedFeedback] = useState<DetailedFeedback | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
@@ -28,7 +44,7 @@ export const ResumeMatch = ({ onBack }: ResumeMatchProps) => {
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (type: 'simple' | 'detailed') => {
     if (!resume || !jobDescription.trim()) {
       toast({
         title: "Missing information",
@@ -44,7 +60,8 @@ export const ResumeMatch = ({ onBack }: ResumeMatchProps) => {
     formData.append("jobDescription", jobDescription);
 
     try {
-      const response = await fetch("http://localhost:5000/match", {
+      const endpoint = type === 'simple' ? '/match' : '/detailed-match';
+      const response = await fetch(`http://localhost:5000${endpoint}`, {
         method: "POST",
         body: formData,
       });
@@ -52,7 +69,13 @@ export const ResumeMatch = ({ onBack }: ResumeMatchProps) => {
       if (!response.ok) throw new Error("Failed to process");
 
       const data = await response.json();
-      setSimilarity(data.similarity);
+      if (type === 'simple') {
+        setSimilarity(data.similarity);
+        setDetailedFeedback(null);
+      } else {
+        setDetailedFeedback(data);
+        setSimilarity(parseInt(data["JD Match"]));
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -116,14 +139,24 @@ export const ResumeMatch = ({ onBack }: ResumeMatchProps) => {
             />
           </div>
 
-          {/* Submit Button */}
-          <Button
-            onClick={handleSubmit}
-            disabled={isLoading || !resume || !jobDescription.trim()}
-            className="w-full"
-          >
-            {isLoading ? "Processing..." : "Calculate Match"}
-          </Button>
+          {/* Submit Buttons */}
+          <div className="flex gap-4">
+            <Button
+              onClick={() => handleSubmit('simple')}
+              disabled={isLoading || !resume || !jobDescription.trim()}
+              className="flex-1"
+            >
+              {isLoading ? "Processing..." : "Quick Match"}
+            </Button>
+            <Button
+              onClick={() => handleSubmit('detailed')}
+              disabled={isLoading || !resume || !jobDescription.trim()}
+              className="flex-1"
+              variant="secondary"
+            >
+              {isLoading ? "Processing..." : "Detailed Analysis"}
+            </Button>
+          </div>
 
           {/* Results Section */}
           {similarity !== null && (
@@ -133,7 +166,7 @@ export const ResumeMatch = ({ onBack }: ResumeMatchProps) => {
                 <div className="flex items-center gap-2">
                   <Percent className="h-4 w-4 text-primary" />
                   <span className="text-lg font-bold text-primary">
-                    {Math.round(similarity)}%
+                    {similarity}%
                   </span>
                 </div>
               </div>
@@ -144,6 +177,46 @@ export const ResumeMatch = ({ onBack }: ResumeMatchProps) => {
                 />
               </div>
             </div>
+          )}
+
+          {/* Detailed Feedback Section */}
+          {detailedFeedback && (
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="missing-keywords">
+                <AccordionTrigger>Missing Keywords</AccordionTrigger>
+                <AccordionContent>
+                  <ul className="list-disc pl-4">
+                    {detailedFeedback["Missing Keywords"].map((keyword, index) => (
+                      <li key={index}>{keyword}</li>
+                    ))}
+                  </ul>
+                </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="profile-summary">
+                <AccordionTrigger>Profile Summary</AccordionTrigger>
+                <AccordionContent>
+                  {detailedFeedback["Profile Summary"]}
+                </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="strengths">
+                <AccordionTrigger>Strengths</AccordionTrigger>
+                <AccordionContent>
+                  {detailedFeedback["Strengths"]}
+                </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="weaknesses">
+                <AccordionTrigger>Weaknesses</AccordionTrigger>
+                <AccordionContent>
+                  {detailedFeedback["Weaknesses"]}
+                </AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="recommendations">
+                <AccordionTrigger>Recommended Courses & Resources</AccordionTrigger>
+                <AccordionContent>
+                  {detailedFeedback["Recommend Courses & Resources"]}
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           )}
         </div>
       </div>
