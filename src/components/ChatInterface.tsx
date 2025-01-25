@@ -75,6 +75,13 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
     }
   };
 
+  const sampleQuestions = [
+    "Contact Information",
+    "What about vishnu lms",
+    "What about pratibha magazine",
+    "What is the email id"
+  ];
+
   return (
     <div className="fixed bottom-4 right-4 w-[680px] h-[600px] bg-white rounded-lg shadow-xl flex flex-col animate-slideIn">
       {/* Header */}
@@ -151,6 +158,22 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
               </Button>
             </div>
           </form>
+        </div>
+
+        {/* FAQ Sidebar */}
+        <div className="w-64 border-l p-4 bg-gray-50">
+          <h3 className="font-semibold mb-3">Sample Questions</h3>
+          <div className="space-y-2">
+            {sampleQuestions.map((question, index) => (
+              <button
+                key={index}
+                className="text-sm text-left w-full p-2 hover:bg-gray-100 rounded transition-colors duration-200"
+                onClick={() => setInput(question)}
+              >
+                {question}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>
