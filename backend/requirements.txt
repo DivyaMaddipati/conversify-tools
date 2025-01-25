@@ -5,6 +5,6 @@ langchain-google-genai
 langchain-community
 google-generativeai
 chromadb
-pypdf
+pypdf2
 selenium
 pandas
