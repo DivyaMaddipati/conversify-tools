@@ -85,14 +85,14 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
   return (
     <div className="fixed bottom-4 right-4 w-[680px] h-[600px] bg-white rounded-lg shadow-xl flex flex-col animate-slideIn">
       {/* Header */}
-      <div className="p-4 border-b flex justify-between items-center bg-primary text-white rounded-t-lg">
+      <div className="p-4 border-b flex justify-between items-center bg-[#0EA5E9] text-white rounded-t-lg">
         <h2 className="font-semibold">SVECW Chat Assistant</h2>
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
             size="icon"
             onClick={onResumeMatch}
-            className="hover:bg-primary-foreground/10"
+            className="hover:bg-[#0EA5E9]/80"
             title="Resume Match"
           >
             <FileText className="h-5 w-5" />
@@ -101,7 +101,7 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
             variant="ghost"
             size="icon"
             onClick={onClose}
-            className="hover:bg-primary-foreground/10"
+            className="hover:bg-[#0EA5E9]/80"
           >
             <X className="h-5 w-5" />
           </Button>
@@ -122,8 +122,8 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
                 <div
                   className={`p-3 rounded-lg max-w-[80%] ${
                     message.sender === "user"
-                      ? "bg-chat-user ml-auto"
-                      : "bg-chat-bot"
+                      ? "bg-[#0EA5E9] text-white ml-auto"
+                      : "bg-[#D3E4FD] text-gray-800"
                   }`}
                 >
                   {message.text}
@@ -153,6 +153,7 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
                 type="submit"
                 size="icon"
                 disabled={isLoading || !input.trim()}
+                className="bg-[#0EA5E9] hover:bg-[#0EA5E9]/80"
               >
                 <Send className="h-4 w-4" />
               </Button>
@@ -167,7 +168,7 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
             {sampleQuestions.map((question, index) => (
               <button
                 key={index}
-                className="text-sm text-left w-full p-2 hover:bg-gray-100 rounded transition-colors duration-200"
+                className="text-sm text-left w-full p-2 hover:bg-[#D3E4FD] rounded transition-colors duration-200"
                 onClick={() => setInput(question)}
               >
                 {question}
