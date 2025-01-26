@@ -16,7 +16,7 @@ from google.generativeai.types.safety_types import HarmBlockThreshold, HarmCateg
 app = Flask(__name__)
 CORS(app, resources={
     r"/*": {
-        "origins": ["http://localhost:5173"],  # Add your frontend URL
+        "origins": ["http://localhost:5173"],
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type"]
     }
@@ -43,7 +43,22 @@ def get_gemini_response(prompt):
     response = model.generate_content(prompt)
     return response.text
 
-# ... keep existing code (load_documents, initialize_embeddings, create_vector_store functions)
+def load_documents(file_path):
+    if file_path.endswith('.pdf'):
+        loader = PyPDFLoader(file_path)
+    elif file_path.endswith('.csv'):
+        loader = CSVLoader(file_path)
+    else:
+        raise ValueError("Unsupported file format")
+    return loader.load()
+
+def initialize_embeddings():
+    return GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=API_KEY)
+
+def create_vector_store(documents, embeddings):
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+    texts = text_splitter.split_documents(documents)
+    return Chroma.from_documents(texts, embeddings)
 
 def initialize_chat_model():
     safety_settings = {
@@ -59,7 +74,33 @@ def initialize_chat_model():
         safety_settings=safety_settings
     )
 
-# ... keep existing code (initialize_qa_chain function)
+def initialize_qa_chain():
+    global qa_chain, chat_model
+    try:
+        # Initialize embeddings
+        embeddings = initialize_embeddings()
+        
+        # Load and process documents
+        documents = load_documents("backend/dataset/placement_details_complete.csv")
+        
+        # Create vector store
+        vector_store = create_vector_store(documents, embeddings)
+        
+        # Initialize chat model if not already initialized
+        if chat_model is None:
+            chat_model = initialize_chat_model()
+        
+        # Create retrieval QA chain
+        qa_chain = RetrievalQA.from_chain_type(
+            llm=chat_model,
+            chain_type="stuff",
+            retriever=vector_store.as_retriever(),
+            return_source_documents=True
+        )
+        
+    except Exception as e:
+        print(f"Error initializing QA chain: {str(e)}")
+        raise
 
 @app.route('/match', methods=['POST', 'OPTIONS'])
 def get_match():
@@ -120,7 +161,7 @@ def get_detailed_match():
         6. Recommend Courses & Resources: Suggest relevant courses or resources to improve the profile and match the JD better.
 
         Resume: {resume_text}
-        Job Description: {jd}
+        Job Description: {job_description}
 
         Provide the response in this format:
         {{
