@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
-import PyPDF2 as pdf
 from langchain.prompts import PromptTemplate
 from langchain.vectorstores import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -10,113 +9,186 @@ from langchain.chains import RetrievalQA
 from langchain.retrievers.multi_query import MultiQueryRetriever
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-import google.generativeai as genai
 from google.generativeai.types.safety_types import HarmBlockThreshold, HarmCategory
+import google.generativeai as genai
+from dotenv import load_dotenv
+import PyPDF2 as pdf
+import json
+
 
 app = Flask(__name__)
-CORS(app, resources={
-    r"/*": {
-        "origins": ["http://localhost:5173"],
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type"]
-    }
-})
+CORS(app)
+
+load_dotenv()
+
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 # Initialize global variables
 qa_chain = None
 chat_model = None
-API_KEY = 'AIzaSyDw8Hip8rTDFG-Dyd2C88wuMD1WgUl3Y3c'
 
-# Configure Gemini
-genai.configure(api_key=API_KEY)
+def load_documents():
+    # Load both PDF and CSV documents
+    pdf_path = os.path.join(os.path.dirname(__file__), 'quicklinks.pdf')
+    csv_path = os.path.join(os.path.dirname(__file__), 'placement_details_complete.csv')
 
-def extract_text_from_pdf(file):
+    pdf_loader = PyPDFLoader(pdf_path)
+    csv_loader = CSVLoader(file_path=csv_path)
+
+    pdf_documents = pdf_loader.load()
+    csv_documents = csv_loader.load()
+
+    return pdf_documents + csv_documents
+
+
+def extract_pdf_text(file):
+    """Extracts text from an uploaded PDF file."""
     reader = pdf.PdfReader(file)
     text = ""
-    for page in range(len(reader.pages)):
-        page = reader.pages[page]
-        text += str(page.extract_text())
+    for page in reader.pages:
+        text += page.extract_text()
     return text
 
 def get_gemini_response(prompt):
+    """Gets a response from the Gemini API."""
     model = genai.GenerativeModel('gemini-pro')
     response = model.generate_content(prompt)
     return response.text
 
-def load_documents(file_path):
-    if file_path.endswith('.pdf'):
-        loader = PyPDFLoader(file_path)
-    elif file_path.endswith('.csv'):
-        loader = CSVLoader(file_path)
-    else:
-        raise ValueError("Unsupported file format")
-    return loader.load()
 
 def initialize_embeddings():
-    return GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=API_KEY)
+    return GoogleGenerativeAIEmbeddings(
+        model='models/embedding-001',
+        google_api_key='AIzaSyDp_2EUaFTtBtW5ikHA-5WJMoHEwszSRVA',
+        task_type="retrieval_query"
+    )
 
-def create_vector_store(documents, embeddings):
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-    texts = text_splitter.split_documents(documents)
-    return Chroma.from_documents(texts, embeddings)
 
 def initialize_chat_model():
     safety_settings = {
-        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
     }
     return ChatGoogleGenerativeAI(
-        model="gemini-pro",
-        google_api_key=API_KEY,
+        model="gemini-1.5-pro",
+        google_api_key='AIzaSyDp_2EUaFTtBtW5ikHA-5WJMoHEwszSRVA',
         temperature=0.3,
         safety_settings=safety_settings
     )
 
+
+def create_vector_store(documents, embeddings):
+    persist_directory = os.path.join(os.path.dirname(__file__), 'chroma_db_combined')
+    vectordb = Chroma.from_documents(
+        documents=documents,
+        embedding=embeddings,
+        persist_directory=persist_directory
+    )
+    vectordb.persist()
+    return vectordb
+
+
 def initialize_qa_chain():
     global qa_chain, chat_model
-    try:
-        # Initialize embeddings
-        embeddings = initialize_embeddings()
-        
-        # Load and process documents
-        documents = load_documents("backend/dataset/placement_details_complete.csv")
-        
-        # Create vector store
-        vector_store = create_vector_store(documents, embeddings)
-        
-        # Initialize chat model if not already initialized
-        if chat_model is None:
-            chat_model = initialize_chat_model()
-        
-        # Create retrieval QA chain
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=chat_model,
-            chain_type="stuff",
-            retriever=vector_store.as_retriever(),
-            return_source_documents=True
-        )
-        
-    except Exception as e:
-        print(f"Error initializing QA chain: {str(e)}")
-        raise
 
-@app.route('/match', methods=['POST', 'OPTIONS'])
-def get_match():
-    if request.method == 'OPTIONS':
-        return '', 204
+    # Load combined documents
+    documents = load_documents()
+
+    # Split documents into chunks
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+    texts = text_splitter.split_documents(documents)
+
+    # Initialize embeddings and vector store
+    embeddings = initialize_embeddings()
+    vectordb = create_vector_store(documents=texts, embeddings=embeddings)
+
+    # Create prompt template
+    prompt_template = """
+    ## Safety and Respect Come First!
+
+    You are programmed to be a helpful and harmless AI. You will not answer requests that promote:
+
+    * **Harassment or Bullying:** Targeting individuals or groups with hateful or hurtful language.
+    * **Hate Speech:**  Content that attacks or demeans others based on race, ethnicity, religion, gender, sexual orientation, disability, or other protected characteristics.
+    * **Violence or Harm:**  Promoting or glorifying violence, illegal activities, or dangerous behavior.
+    * **Misinformation and Falsehoods:**  Spreading demonstrably false or misleading information.
+
+    **How to Use You:**
+
+    1. **Provide Context:** Give me background information on a topic.
+    2. **Ask Your Question:** Clearly state your question related to the provided context.
+
+    **Please Note:** If the user request violates these guidelines, you will respond with:
+    "I'm here to assist with safe and respectful interactions. Your query goes against my guidelines. Let's try something different that promotes a positive and inclusive environment."
+
+    ##  Answering User Question:
+
+    Answer the question as precisely as possible using the provided context. The context can be from different topics. Please make sure the context is highly related to the question. If the answer is not in the context, you only say "answer is not in the context".
+
+    Context: \n {context}
+    Question: \n {question}
+    Answer:
+    """
+
+    prompt = PromptTemplate(template=prompt_template, input_variables=['context', 'question'])
+
+    # Create QA chain
+    retriever_from_llm = MultiQueryRetriever.from_llm(
+        retriever=vectordb.as_retriever(search_kwargs={"k": 5}),
+        llm=chat_model
+    )
+
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=chat_model,
+        retriever=retriever_from_llm,
+        return_source_documents=True,
+        chain_type="stuff",
+        chain_type_kwargs={"prompt": prompt}
+    )
+
+
+@app.route('/chat', methods=['POST'])
+def chat():
     try:
-        if 'resume' not in request.files:
-            return jsonify({'error': 'No resume file provided'}), 400
-        
+        data = request.json
+        question = data.get('question')
+
+        if not question:
+            return jsonify({'error': 'No question provided'}), 400
+
+        # Initialize QA chain if not already initialized
+        global qa_chain
+        if qa_chain is None:
+            initialize_qa_chain()
+
+        # Get response from QA chain
+        response = qa_chain.invoke({"query": question})
+        answer = response.get('result', 'I could not find an answer to your question.')
+
+        return jsonify({'answer': answer})
+
+    except Exception as e:
+        print(f"Error processing request: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+    
+@app.route('/match', methods=['POST'])
+def match():
+    """Handles quick resume match requests."""
+    try:
+        print("trying")
+        if 'resume' not in request.files or 'jobDescription' not in request.form:
+            return jsonify({"error": "Missing resume or job description"}), 400
+
         resume_file = request.files['resume']
-        job_description = request.form.get('jobDescription')
+        job_description = request.form['jobDescription']
+
+        # Extract resume text
+        resume_text = extract_pdf_text(resume_file)
         
-        if not job_description:
-            return jsonify({'error': 'No job description provided'}), 400
-            
-        resume_text = extract_text_from_pdf(resume_file)
+
+        # Create prompt for matching percentage
         matching_prompt = f"""
         Hey Act Like a skilled or very experienced ATS. Your task is to evaluate the resume based on the given job description. 
         Only provide the JD Match percentage as a response.
@@ -127,29 +199,32 @@ def get_match():
         Provide response in the format:
         {{"JD Match": "%"}}
         """
-        
-        response = get_gemini_response(matching_prompt)
-        return jsonify({'similarity': response})
-        
-    except Exception as e:
-        print(f"Error processing match request: {str(e)}")
-        return jsonify({'error': 'Failed to process the matching request'}), 500
 
-@app.route('/detailed-match', methods=['POST', 'OPTIONS'])
-def get_detailed_match():
-    if request.method == 'OPTIONS':
-        return '', 204
+        response = get_gemini_response(matching_prompt)
+        print(type(response))
+        response = response.split(':')[1].strip('}% ')
+        response = response[1:-2]
+        print(response)
+        return jsonify({"similarity": int(response)})
+
+    except Exception as e:
+        print(f"Error: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
+@app.route('/detailed-match', methods=['POST'])
+def detailed_match():
+    """Handles detailed resume analysis requests."""
     try:
-        if 'resume' not in request.files:
-            return jsonify({'error': 'No resume file provided'}), 400
-        
+        if 'resume' not in request.files or 'jobDescription' not in request.form:
+            return jsonify({"error": "Missing resume or job description"}), 400
+
         resume_file = request.files['resume']
-        job_description = request.form.get('jobDescription')
-        
-        if not job_description:
-            return jsonify({'error': 'No job description provided'}), 400
-            
-        resume_text = extract_text_from_pdf(resume_file)
+        job_description = request.form['jobDescription']
+
+        # Extract resume text
+        resume_text = extract_pdf_text(resume_file)
+
+        # Create prompt for detailed feedback
         feedback_prompt = f"""
         Hey Act Like a skilled or very experienced ATS. Your task is to evaluate the resume based on the given job description. 
         Provide detailed feedback including:
@@ -173,39 +248,15 @@ def get_detailed_match():
           "Recommend Courses & Resources": ""
         }}
         """
-        
+
         response = get_gemini_response(feedback_prompt)
-        return jsonify(response)
-        
-    except Exception as e:
-        print(f"Error processing detailed match request: {str(e)}")
-        return jsonify({'error': 'Failed to process the detailed matching request'}), 500
-
-@app.route('/chat', methods=['POST', 'OPTIONS'])
-def chat():
-    if request.method == 'OPTIONS':
-        return '', 204
-    try:
-        data = request.json
-        question = data.get('question')
-
-        if not question:
-            return jsonify({'error': 'No question provided'}), 400
-
-        # Initialize QA chain if not already initialized
-        global qa_chain
-        if qa_chain is None:
-            initialize_qa_chain()
-
-        # Get response from QA chain
-        response = qa_chain.invoke({"query": question})
-        answer = response.get('result', 'I could not find an answer to your question.')
-
-        return jsonify({'answer': answer})
+        feedback = json.loads(response)
+        return jsonify(feedback)
 
     except Exception as e:
-        print(f"Error processing request: {str(e)}")
-        return jsonify({'error': 'Internal server error'}), 500
+        print(f"Error: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
 
 if __name__ == '__main__':
     chat_model = initialize_chat_model()

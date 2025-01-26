@@ -173,7 +173,7 @@ export const ResumeMatch = ({ onBack }: ResumeMatchProps) => {
               <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-primary transition-all duration-500 ease-out"
-                  style={{ width: `${similarity}%` }}
+                  style={{ width: `${similarity}` }}
                 />
               </div>
             </div>
