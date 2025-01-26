@@ -57,59 +57,102 @@ def initialize_embeddings():
         return embeddings
     except Exception as e:
         print(f"Error initializing embeddings: {str(e)}")
-        print("Please ensure you have set up Google Application Default Credentials.")
-        print("Visit: https://cloud.google.com/docs/authentication/external/set-up-adc")
         return None
 
-# ... keep existing code (extract_text_from_pdf, load_documents, create_vector_store functions)
-
-def initialize_qa_chain():
-    global qa_chain, chat_model
-
+def extract_text_from_pdf(pdf_file):
     try:
-        documents = load_documents()
-        if not documents:
-            raise Exception("No documents loaded")
+        reader = pdf.PdfReader(pdf_file)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text()
+        return text
+    except Exception as e:
+        print(f"Error extracting text from PDF: {str(e)}")
+        return None
 
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-        texts = text_splitter.split_documents(documents)
+# ... keep existing code (load_documents, create_vector_store, initialize_qa_chain functions)
 
-        embeddings = initialize_embeddings()
-        if not embeddings:
-            raise Exception("Failed to initialize embeddings")
+@app.route('/match', methods=['POST'])
+def get_matching_percentage():
+    try:
+        if 'resume' not in request.files:
+            return jsonify({'error': 'No resume file provided'}), 400
+        
+        resume_file = request.files['resume']
+        job_description = request.form.get('jobDescription')
+        
+        if not job_description:
+            return jsonify({'error': 'No job description provided'}), 400
+        
+        resume_text = extract_text_from_pdf(resume_file)
+        if not resume_text:
+            return jsonify({'error': 'Failed to extract text from resume'}), 400
 
-        vectordb = create_vector_store(documents=texts, embeddings=embeddings)
-        if not vectordb:
-            raise Exception("Failed to create vector store")
+        matching_prompt = f"""
+        Act like a skilled ATS (Applicant Tracking System). Evaluate the resume based on the given job description. 
+        Only provide the match percentage as a number between 0 and 100.
 
-        prompt_template = """
-        Answer the question as precisely as possible using the provided context. 
-        If the answer is not in the context, say "I don't have enough information to answer that question."
+        Resume: {resume_text}
+        Job Description: {job_description}
 
-        Context: {context}
-        Question: {question}
-        Answer:
+        Return only the number, no other text.
         """
 
-        prompt = PromptTemplate(template=prompt_template, input_variables=['context', 'question'])
+        response = chat_model.invoke(matching_prompt)
+        try:
+            similarity = int(response.content.strip())
+            return jsonify({'similarity': similarity})
+        except ValueError:
+            return jsonify({'error': 'Invalid response format'}), 500
 
-        retriever_from_llm = MultiQueryRetriever.from_llm(
-            retriever=vectordb.as_retriever(search_kwargs={"k": 5}),
-            llm=chat_model
-        )
-
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=chat_model,
-            retriever=retriever_from_llm,
-            return_source_documents=True,
-            chain_type="stuff",
-            chain_type_kwargs={"prompt": prompt}
-        )
-        
-        return True
     except Exception as e:
-        print(f"Error initializing QA chain: {str(e)}")
-        return False
+        print(f"Error processing match request: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/detailed-match', methods=['POST'])
+def get_detailed_feedback():
+    try:
+        if 'resume' not in request.files:
+            return jsonify({'error': 'No resume file provided'}), 400
+        
+        resume_file = request.files['resume']
+        job_description = request.form.get('jobDescription')
+        
+        if not job_description:
+            return jsonify({'error': 'No job description provided'}), 400
+        
+        resume_text = extract_text_from_pdf(resume_file)
+        if not resume_text:
+            return jsonify({'error': 'Failed to extract text from resume'}), 400
+
+        feedback_prompt = f"""
+        Act like a skilled ATS (Applicant Tracking System). Evaluate the resume based on the given job description.
+        Provide detailed feedback in the following JSON format:
+        {{
+          "JD Match": "percentage as string with % symbol",
+          "Missing Keywords": ["array of missing important keywords"],
+          "Profile Summary": "brief summary of profile alignment",
+          "Strengths": "key strengths based on resume",
+          "Weaknesses": "areas needing improvement",
+          "Recommend Courses & Resources": "relevant course suggestions"
+        }}
+
+        Resume: {resume_text}
+        Job Description: {job_description}
+
+        Ensure the response is valid JSON.
+        """
+
+        response = chat_model.invoke(feedback_prompt)
+        try:
+            feedback_dict = json.loads(response.content.strip())
+            return jsonify(feedback_dict)
+        except json.JSONDecodeError:
+            return jsonify({'error': 'Invalid response format'}), 500
+
+    except Exception as e:
+        print(f"Error processing detailed match request: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/chat', methods=['POST'])
 def chat():
