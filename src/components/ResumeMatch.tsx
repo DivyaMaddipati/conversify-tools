@@ -89,13 +89,13 @@ export const ResumeMatch = ({ onBack }: ResumeMatchProps) => {
 
   return (
     <div className="fixed bottom-4 right-4 w-[680px] h-[600px] bg-white rounded-lg shadow-xl flex flex-col animate-slideIn">
-      <div className="p-4 border-b flex justify-between items-center bg-primary text-white rounded-t-lg">
+      <div className="p-4 border-b flex justify-between items-center bg-[#0EA5E9] text-white rounded-t-lg">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
             size="icon"
             onClick={onBack}
-            className="hover:bg-primary-foreground/10"
+            className="hover:bg-[#0EA5E9]/80"
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -105,10 +105,9 @@ export const ResumeMatch = ({ onBack }: ResumeMatchProps) => {
 
       <div className="flex-1 p-6 overflow-y-auto">
         <div className="space-y-6">
-          {/* Resume Upload Section */}
           <div className="space-y-2">
-            <label className="block text-sm font-medium">Upload Resume (PDF)</label>
-            <div className="border-2 border-dashed rounded-lg p-6 text-center">
+            <label className="block text-sm font-medium text-[#0EA5E9]">Upload Resume (PDF)</label>
+            <div className="border-2 border-dashed rounded-lg p-6 text-center border-[#0EA5E9]/20">
               <input
                 type="file"
                 accept=".pdf"
@@ -120,72 +119,68 @@ export const ResumeMatch = ({ onBack }: ResumeMatchProps) => {
                 htmlFor="resume-upload"
                 className="cursor-pointer flex flex-col items-center gap-2"
               >
-                <Upload className="h-8 w-8 text-gray-400" />
-                <span className="text-sm text-gray-600">
+                <Upload className="h-8 w-8 text-[#0EA5E9]" />
+                <span className="text-sm text-[#0EA5E9]">
                   {resume ? resume.name : "Click to upload or drag and drop"}
                 </span>
               </label>
             </div>
           </div>
 
-          {/* Job Description Section */}
           <div className="space-y-2">
-            <label className="block text-sm font-medium">Job Description</label>
+            <label className="block text-sm font-medium text-[#0EA5E9]">Job Description</label>
             <Textarea
               value={jobDescription}
               onChange={(e) => setJobDescription(e.target.value)}
               placeholder="Paste the job description here..."
-              className="h-32"
+              className="h-32 border-[#0EA5E9]/20"
             />
           </div>
 
-          {/* Submit Buttons */}
           <div className="flex gap-4">
             <Button
               onClick={() => handleSubmit('simple')}
               disabled={isLoading || !resume || !jobDescription.trim()}
-              className="flex-1"
+              className="flex-1 bg-[#0EA5E9] hover:bg-[#0EA5E9]/80"
             >
               {isLoading ? "Processing..." : "Quick Match"}
             </Button>
             <Button
               onClick={() => handleSubmit('detailed')}
               disabled={isLoading || !resume || !jobDescription.trim()}
-              className="flex-1"
+              className="flex-1 bg-[#D3E4FD] text-[#0EA5E9] hover:bg-[#D3E4FD]/80"
               variant="secondary"
             >
               {isLoading ? "Processing..." : "Detailed Analysis"}
             </Button>
           </div>
 
-          {/* Results Section */}
           {similarity !== null && (
-            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+            <div className="mt-6 p-4 bg-[#D3E4FD]/30 rounded-lg">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Match Score:</span>
+                <span className="text-sm font-medium text-[#0EA5E9]">Match Score:</span>
                 <div className="flex items-center gap-2">
-                  <Percent className="h-4 w-4 text-primary" />
-                  <span className="text-lg font-bold text-primary">
+                  <Percent className="h-4 w-4 text-[#0EA5E9]" />
+                  <span className="text-lg font-bold text-[#0EA5E9]">
                     {similarity}%
                   </span>
                 </div>
               </div>
-              <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div className="mt-2 h-2 bg-[#D3E4FD] rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-primary transition-all duration-500 ease-out"
-                  style={{ width: `${similarity}` }}
+                  className="h-full bg-[#0EA5E9] transition-all duration-500 ease-out"
+                  style={{ width: `${similarity}%` }}
                 />
               </div>
             </div>
           )}
 
-          {/* Detailed Feedback Section */}
           {detailedFeedback && (
             <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="missing-keywords">
-                <AccordionTrigger>Missing Keywords</AccordionTrigger>
+              <AccordionItem value="missing-keywords" className="border-[#0EA5E9]/20">
+                <AccordionTrigger className="text-[#0EA5E9]">Missing Keywords</AccordionTrigger>
                 <AccordionContent>
-                  <ul className="list-disc pl-4">
+                  <ul className="list-disc pl-4 text-[#0EA5E9]/80">
                     {detailedFeedback["Missing Keywords"].map((keyword, index) => (
                       <li key={index}>{keyword}</li>
                     ))}
