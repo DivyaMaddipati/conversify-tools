@@ -1,17 +1,15 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
-import PyPDF2 as pdf
 from langchain.prompts import PromptTemplate
-from langchain_community.vectorstores import Chroma
+from langchain.vectorstores import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import PyPDFLoader, CSVLoader
+from langchain.document_loaders import PyPDFLoader, CSVLoader
 from langchain.chains import RetrievalQA
 from langchain.retrievers.multi_query import MultiQueryRetriever
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from google.generativeai.types.safety_types import HarmBlockThreshold, HarmCategory
-import json
 
 app = Flask(__name__)
 CORS(app)
@@ -20,139 +18,112 @@ CORS(app)
 qa_chain = None
 chat_model = None
 
-# Hardcoded Google API Key
-GOOGLE_API_KEY = "AIzaSyC9NvHQGcU34fXbs6fcgIYtXEeK14E4InM"  # Replace with your actual API key
+def load_documents():
+    # Load both PDF and CSV documents
+    pdf_path = os.path.join(os.path.dirname(__file__), 'quicklinks.pdf')
+    csv_path = os.path.join(os.path.dirname(__file__), 'placement_details_complete.csv')
 
-def initialize_chat_model():
-    try:
-        safety_settings = {
-            HarmCategory.DANGEROUS_CONTENT: HarmBlockThreshold.MEDIUM_AND_ABOVE,
-            HarmCategory.HATE_SPEECH: HarmBlockThreshold.MEDIUM_AND_ABOVE,
-            HarmCategory.HARASSMENT: HarmBlockThreshold.MEDIUM_AND_ABOVE,
-            HarmCategory.SEXUALLY_EXPLICIT: HarmBlockThreshold.MEDIUM_AND_ABOVE,
-        }
-        
-        model = ChatGoogleGenerativeAI(
-            model="gemini-pro",
-            temperature=0.7,
-            google_api_key=GOOGLE_API_KEY,
-            safety_settings=safety_settings,
-            convert_system_message_to_human=True
-        )
-        print("Chat model initialized successfully.")
-        return model
-    except Exception as e:
-        print(f"Error initializing chat model: {str(e)}")
-        return None
+    pdf_loader = PyPDFLoader(pdf_path)
+    csv_loader = CSVLoader(file_path=csv_path)
+
+    pdf_documents = pdf_loader.load()
+    csv_documents = csv_loader.load()
+
+    return pdf_documents + csv_documents
+
 
 def initialize_embeddings():
-    try:
-        embeddings = GoogleGenerativeAIEmbeddings(
-            model='models/embedding-001',
-            task_type="retrieval_query",
-            google_api_key=GOOGLE_API_KEY,
-            request_timeout=120
-        )
-        print("Embeddings initialized successfully.")
-        return embeddings
-    except Exception as e:
-        print(f"Error initializing embeddings: {str(e)}")
-        return None
+    return GoogleGenerativeAIEmbeddings(
+        model='models/embedding-001',
+        google_api_key='AIzaSyC9NvHQGcU34fXbs6fcgIYtXEeK14E4InM',
+        task_type="retrieval_query"
+    )
 
-def extract_text_from_pdf(pdf_file):
-    try:
-        reader = pdf.PdfReader(pdf_file)
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text()
-        return text
-    except Exception as e:
-        print(f"Error extracting text from PDF: {str(e)}")
-        return None
 
-# ... keep existing code (load_documents, create_vector_store, initialize_qa_chain functions)
+def initialize_chat_model():
+    safety_settings = {
+        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+    }
+    return ChatGoogleGenerativeAI(
+        model="gemini-1.5-pro",
+        google_api_key='AIzaSyC9NvHQGcU34fXbs6fcgIYtXEeK14E4InM',
+        temperature=0.3,
+        safety_settings=safety_settings
+    )
 
-@app.route('/match', methods=['POST'])
-def get_matching_percentage():
-    try:
-        if 'resume' not in request.files:
-            return jsonify({'error': 'No resume file provided'}), 400
-        
-        resume_file = request.files['resume']
-        job_description = request.form.get('jobDescription')
-        
-        if not job_description:
-            return jsonify({'error': 'No job description provided'}), 400
-        
-        resume_text = extract_text_from_pdf(resume_file)
-        if not resume_text:
-            return jsonify({'error': 'Failed to extract text from resume'}), 400
 
-        matching_prompt = f"""
-        Act like a skilled ATS (Applicant Tracking System). Evaluate the resume based on the given job description. 
-        Only provide the match percentage as a number between 0 and 100.
+def create_vector_store(documents, embeddings):
+    persist_directory = os.path.join(os.path.dirname(__file__), 'chroma_db_combined')
+    vectordb = Chroma.from_documents(
+        documents=documents,
+        embedding=embeddings,
+        persist_directory=persist_directory
+    )
+    vectordb.persist()
+    return vectordb
 
-        Resume: {resume_text}
-        Job Description: {job_description}
 
-        Return only the number, no other text.
-        """
+def initialize_qa_chain():
+    global qa_chain, chat_model
 
-        response = chat_model.invoke(matching_prompt)
-        try:
-            similarity = int(response.content.strip())
-            return jsonify({'similarity': similarity})
-        except ValueError:
-            return jsonify({'error': 'Invalid response format'}), 500
+    # Load combined documents
+    documents = load_documents()
 
-    except Exception as e:
-        print(f"Error processing match request: {str(e)}")
-        return jsonify({'error': 'Internal server error'}), 500
+    # Split documents into chunks
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+    texts = text_splitter.split_documents(documents)
 
-@app.route('/detailed-match', methods=['POST'])
-def get_detailed_feedback():
-    try:
-        if 'resume' not in request.files:
-            return jsonify({'error': 'No resume file provided'}), 400
-        
-        resume_file = request.files['resume']
-        job_description = request.form.get('jobDescription')
-        
-        if not job_description:
-            return jsonify({'error': 'No job description provided'}), 400
-        
-        resume_text = extract_text_from_pdf(resume_file)
-        if not resume_text:
-            return jsonify({'error': 'Failed to extract text from resume'}), 400
+    # Initialize embeddings and vector store
+    embeddings = initialize_embeddings()
+    vectordb = create_vector_store(documents=texts, embeddings=embeddings)
 
-        feedback_prompt = f"""
-        Act like a skilled ATS (Applicant Tracking System). Evaluate the resume based on the given job description.
-        Provide detailed feedback in the following JSON format:
-        {{
-          "JD Match": "percentage as string with % symbol",
-          "Missing Keywords": ["array of missing important keywords"],
-          "Profile Summary": "brief summary of profile alignment",
-          "Strengths": "key strengths based on resume",
-          "Weaknesses": "areas needing improvement",
-          "Recommend Courses & Resources": "relevant course suggestions"
-        }}
+    # Create prompt template
+    prompt_template = """
+    ## Safety and Respect Come First!
 
-        Resume: {resume_text}
-        Job Description: {job_description}
+    You are programmed to be a helpful and harmless AI. You will not answer requests that promote:
 
-        Ensure the response is valid JSON.
-        """
+    * **Harassment or Bullying:** Targeting individuals or groups with hateful or hurtful language.
+    * **Hate Speech:**  Content that attacks or demeans others based on race, ethnicity, religion, gender, sexual orientation, disability, or other protected characteristics.
+    * **Violence or Harm:**  Promoting or glorifying violence, illegal activities, or dangerous behavior.
+    * **Misinformation and Falsehoods:**  Spreading demonstrably false or misleading information.
 
-        response = chat_model.invoke(feedback_prompt)
-        try:
-            feedback_dict = json.loads(response.content.strip())
-            return jsonify(feedback_dict)
-        except json.JSONDecodeError:
-            return jsonify({'error': 'Invalid response format'}), 500
+    **How to Use You:**
 
-    except Exception as e:
-        print(f"Error processing detailed match request: {str(e)}")
-        return jsonify({'error': 'Internal server error'}), 500
+    1. **Provide Context:** Give me background information on a topic.
+    2. **Ask Your Question:** Clearly state your question related to the provided context.
+
+    **Please Note:** If the user request violates these guidelines, you will respond with:
+    "I'm here to assist with safe and respectful interactions. Your query goes against my guidelines. Let's try something different that promotes a positive and inclusive environment."
+
+    ##  Answering User Question:
+
+    Answer the question as precisely as possible using the provided context. The context can be from different topics. Please make sure the context is highly related to the question. If the answer is not in the context, you only say "answer is not in the context".
+
+    Context: \n {context}
+    Question: \n {question}
+    Answer:
+    """
+
+    prompt = PromptTemplate(template=prompt_template, input_variables=['context', 'question'])
+
+    # Create QA chain
+    retriever_from_llm = MultiQueryRetriever.from_llm(
+        retriever=vectordb.as_retriever(search_kwargs={"k": 5}),
+        llm=chat_model
+    )
+
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=chat_model,
+        retriever=retriever_from_llm,
+        return_source_documents=True,
+        chain_type="stuff",
+        chain_type_kwargs={"prompt": prompt}
+    )
+
 
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -163,32 +134,22 @@ def chat():
         if not question:
             return jsonify({'error': 'No question provided'}), 400
 
+        # Initialize QA chain if not already initialized
+        global qa_chain
         if qa_chain is None:
-            success = initialize_qa_chain()
-            if not success:
-                return jsonify({'error': 'Failed to initialize QA chain'}), 500
+            initialize_qa_chain()
 
+        # Get response from QA chain
         response = qa_chain.invoke({"query": question})
         answer = response.get('result', 'I could not find an answer to your question.')
 
         return jsonify({'answer': answer})
 
     except Exception as e:
-        print(f"Error processing chat request: {str(e)}")
+        print(f"Error processing request: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
+
 if __name__ == '__main__':
-    # Initialize chat model
     chat_model = initialize_chat_model()
-    if not chat_model:
-        print("Failed to initialize chat model. Exiting...")
-        exit(1)
-    
-    # Initialize QA chain
-    success = initialize_qa_chain()
-    if not success:
-        print("Failed to initialize QA chain. Exiting...")
-        exit(1)
-    
-    print("Server initialized successfully!")
     app.run(debug=True, port=5000)
