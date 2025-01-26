@@ -14,7 +14,13 @@ import google.generativeai as genai
 from google.generativeai.types.safety_types import HarmBlockThreshold, HarmCategory
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={
+    r"/*": {
+        "origins": ["http://localhost:5173"],  # Add your frontend URL
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type"]
+    }
+})
 
 # Initialize global variables
 qa_chain = None
@@ -55,8 +61,10 @@ def initialize_chat_model():
 
 # ... keep existing code (initialize_qa_chain function)
 
-@app.route('/match', methods=['POST'])
+@app.route('/match', methods=['POST', 'OPTIONS'])
 def get_match():
+    if request.method == 'OPTIONS':
+        return '', 204
     try:
         if 'resume' not in request.files:
             return jsonify({'error': 'No resume file provided'}), 400
@@ -86,8 +94,10 @@ def get_match():
         print(f"Error processing match request: {str(e)}")
         return jsonify({'error': 'Failed to process the matching request'}), 500
 
-@app.route('/detailed-match', methods=['POST'])
+@app.route('/detailed-match', methods=['POST', 'OPTIONS'])
 def get_detailed_match():
+    if request.method == 'OPTIONS':
+        return '', 204
     try:
         if 'resume' not in request.files:
             return jsonify({'error': 'No resume file provided'}), 400
@@ -110,7 +120,7 @@ def get_detailed_match():
         6. Recommend Courses & Resources: Suggest relevant courses or resources to improve the profile and match the JD better.
 
         Resume: {resume_text}
-        Job Description: {job_description}
+        Job Description: {jd}
 
         Provide the response in this format:
         {{
@@ -130,7 +140,31 @@ def get_detailed_match():
         print(f"Error processing detailed match request: {str(e)}")
         return jsonify({'error': 'Failed to process the detailed matching request'}), 500
 
-# ... keep existing code (chat endpoint)
+@app.route('/chat', methods=['POST', 'OPTIONS'])
+def chat():
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        data = request.json
+        question = data.get('question')
+
+        if not question:
+            return jsonify({'error': 'No question provided'}), 400
+
+        # Initialize QA chain if not already initialized
+        global qa_chain
+        if qa_chain is None:
+            initialize_qa_chain()
+
+        # Get response from QA chain
+        response = qa_chain.invoke({"query": question})
+        answer = response.get('result', 'I could not find an answer to your question.')
+
+        return jsonify({'answer': answer})
+
+    except Exception as e:
+        print(f"Error processing request: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
     chat_model = initialize_chat_model()
