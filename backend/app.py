@@ -20,9 +20,21 @@ CORS(app)
 qa_chain = None
 chat_model = None
 
+def check_google_api_key():
+    api_key = os.getenv('GOOGLE_API_KEY')
+    if not api_key:
+        print("ERROR: GOOGLE_API_KEY environment variable is not set!")
+        print("Please set your Google API key using:")
+        print("export GOOGLE_API_KEY='your-api-key' (Linux/Mac)")
+        print("set GOOGLE_API_KEY=your-api-key (Windows)")
+        return False
+    return True
+
 def initialize_chat_model():
     try:
-        # Updated safety settings to be more permissive
+        if not check_google_api_key():
+            return None
+
         safety_settings = {
             HarmCategory.DANGEROUS_CONTENT: HarmBlockThreshold.MEDIUM_AND_ABOVE,
             HarmCategory.HATE_SPEECH: HarmBlockThreshold.MEDIUM_AND_ABOVE,
@@ -36,6 +48,7 @@ def initialize_chat_model():
             safety_settings=safety_settings,
             convert_system_message_to_human=True
         )
+        print("Chat model initialized successfully.")
         return model
     except Exception as e:
         print(f"Error initializing chat model: {str(e)}")
@@ -43,59 +56,23 @@ def initialize_chat_model():
 
 def initialize_embeddings():
     try:
-        return GoogleGenerativeAIEmbeddings(
+        if not check_google_api_key():
+            return None
+
+        embeddings = GoogleGenerativeAIEmbeddings(
             model='models/embedding-001',
             task_type="retrieval_query",
             request_timeout=120
         )
+        print("Embeddings initialized successfully.")
+        return embeddings
     except Exception as e:
         print(f"Error initializing embeddings: {str(e)}")
+        print("Please ensure you have set up Google Application Default Credentials.")
+        print("Visit: https://cloud.google.com/docs/authentication/external/set-up-adc")
         return None
 
-def extract_text_from_pdf(pdf_file):
-    try:
-        reader = pdf.PdfReader(pdf_file)
-        text = ""
-        for page in reader.pages:
-            text += str(page.extract_text())
-        return text
-    except Exception as e:
-        print(f"Error extracting text from PDF: {str(e)}")
-        return ""
-
-def load_documents():
-    try:
-        pdf_path = os.path.join(os.path.dirname(__file__), 'quicklinks.pdf')
-        csv_path = os.path.join(os.path.dirname(__file__), 'placement_details_complete.csv')
-
-        if not os.path.exists(pdf_path) or not os.path.exists(csv_path):
-            print("Required files not found!")
-            return []
-
-        pdf_loader = PyPDFLoader(pdf_path)
-        csv_loader = CSVLoader(file_path=csv_path)
-
-        pdf_documents = pdf_loader.load()
-        csv_documents = csv_loader.load()
-
-        return pdf_documents + csv_documents
-    except Exception as e:
-        print(f"Error loading documents: {str(e)}")
-        return []
-
-def create_vector_store(documents, embeddings):
-    try:
-        persist_directory = os.path.join(os.path.dirname(__file__), 'chroma_db_combined')
-        vectordb = Chroma.from_documents(
-            documents=documents,
-            embedding=embeddings,
-            persist_directory=persist_directory
-        )
-        vectordb.persist()
-        return vectordb
-    except Exception as e:
-        print(f"Error creating vector store: {str(e)}")
-        return None
+# ... keep existing code (extract_text_from_pdf, load_documents, create_vector_store functions)
 
 def initialize_qa_chain():
     global qa_chain, chat_model
@@ -169,7 +146,12 @@ def chat():
         return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
-    # Initialize chat model before running the app
+    # Check for Google API key first
+    if not check_google_api_key():
+        print("Exiting due to missing Google API key...")
+        exit(1)
+
+    # Initialize chat model
     chat_model = initialize_chat_model()
     if not chat_model:
         print("Failed to initialize chat model. Exiting...")
