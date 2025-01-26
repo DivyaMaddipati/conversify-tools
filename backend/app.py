@@ -20,21 +20,11 @@ CORS(app)
 qa_chain = None
 chat_model = None
 
-def check_google_api_key():
-    api_key = os.getenv('GOOGLE_API_KEY')
-    if not api_key:
-        print("ERROR: GOOGLE_API_KEY environment variable is not set!")
-        print("Please set your Google API key using:")
-        print("export GOOGLE_API_KEY='your-api-key' (Linux/Mac)")
-        print("set GOOGLE_API_KEY=your-api-key (Windows)")
-        return False
-    return True
+# Hardcoded Google API Key
+GOOGLE_API_KEY = "YOUR-API-KEY-HERE"  # Replace with your actual API key
 
 def initialize_chat_model():
     try:
-        if not check_google_api_key():
-            return None
-
         safety_settings = {
             HarmCategory.DANGEROUS_CONTENT: HarmBlockThreshold.MEDIUM_AND_ABOVE,
             HarmCategory.HATE_SPEECH: HarmBlockThreshold.MEDIUM_AND_ABOVE,
@@ -45,6 +35,7 @@ def initialize_chat_model():
         model = ChatGoogleGenerativeAI(
             model="gemini-pro",
             temperature=0.7,
+            google_api_key=GOOGLE_API_KEY,
             safety_settings=safety_settings,
             convert_system_message_to_human=True
         )
@@ -56,12 +47,10 @@ def initialize_chat_model():
 
 def initialize_embeddings():
     try:
-        if not check_google_api_key():
-            return None
-
         embeddings = GoogleGenerativeAIEmbeddings(
             model='models/embedding-001',
             task_type="retrieval_query",
+            google_api_key=GOOGLE_API_KEY,
             request_timeout=120
         )
         print("Embeddings initialized successfully.")
@@ -146,11 +135,6 @@ def chat():
         return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
-    # Check for Google API key first
-    if not check_google_api_key():
-        print("Exiting due to missing Google API key...")
-        exit(1)
-
     # Initialize chat model
     chat_model = initialize_chat_model()
     if not chat_model:
