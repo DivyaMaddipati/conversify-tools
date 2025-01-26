@@ -21,7 +21,7 @@ qa_chain = None
 chat_model = None
 
 # Hardcoded Google API Key
-GOOGLE_API_KEY = "YOUR-API-KEY-HERE"  # Replace with your actual API key
+GOOGLE_API_KEY = "AIzaSyC9NvHQGcU34fXbs6fcgIYtXEeK14E4InM"  # Replace with your actual API key
 
 def initialize_chat_model():
     try:
