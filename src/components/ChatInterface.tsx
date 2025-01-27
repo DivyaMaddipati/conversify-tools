@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, X, FileText, Image } from "lucide-react";
+import { Send, X, FileText, Image, Mic } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
@@ -23,6 +23,7 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isImageMode, setIsImageMode] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -116,6 +117,33 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
     });
   };
 
+  const toggleRecording = async () => {
+    if (!isRecording) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        setIsRecording(true);
+        toast({
+          title: "Recording Started",
+          description: "Speak now...",
+        });
+        // We'll implement the actual recording logic later
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Could not access microphone",
+          variant: "destructive",
+        });
+      }
+    } else {
+      setIsRecording(false);
+      toast({
+        title: "Recording Stopped",
+        description: "Processing your audio...",
+      });
+      // We'll implement the stop recording and processing logic later
+    }
+  };
+
   const sampleQuestions = [
     "Contact Information",
     "What about vishnu lms",
@@ -195,6 +223,17 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
                 disabled={isLoading}
                 className="flex-1"
               />
+              <Button
+                type="button"
+                size="icon"
+                onClick={toggleRecording}
+                className={`${
+                  isRecording ? "bg-red-500" : "bg-gray-200"
+                } hover:bg-opacity-80`}
+                title={isRecording ? "Stop recording" : "Start recording"}
+              >
+                <Mic className={`h-4 w-4 ${isRecording ? "text-white" : "text-gray-600"}`} />
+              </Button>
               <Button
                 type="button"
                 size="icon"
