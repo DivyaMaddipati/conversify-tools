@@ -10,3 +10,5 @@ selenium
 pandas
 sentence-transformers
 pillow
+SpeechRecognition
+pyaudio
