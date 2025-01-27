@@ -8,3 +8,5 @@ chromadb
 pypdf2
 selenium
 pandas
+sentence-transformers
+pillow
