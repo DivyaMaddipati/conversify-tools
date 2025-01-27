@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import os
 from langchain.prompts import PromptTemplate
@@ -14,18 +14,43 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 import PyPDF2 as pdf
 import json
-
+from PIL import Image
+from sentence_transformers import SentenceTransformer
+import chromadb
 
 app = Flask(__name__)
 CORS(app)
 
 load_dotenv()
 
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+# Initialize ChromaDB client and collection
+client = chromadb.Client()
+collection = client.get_or_create_collection("image_labels")
 
-# Initialize global variables
-qa_chain = None
-chat_model = None
+# Initialize SentenceTransformer model
+embedder = SentenceTransformer("all-MiniLM-L6-v2")
+
+# Load labels from JSON file
+try:
+    with open(os.path.join(os.path.dirname(__file__), 'labels.json'), 'r') as f:
+        labels = json.load(f)
+except FileNotFoundError:
+    labels = {}
+
+def populate_vector_database():
+    for label, image_path in labels.items():
+        existing_records = collection.get(where={"label": label})
+        if len(existing_records["ids"]) == 0:
+            embedding = embedder.encode(label).tolist()
+            collection.add(
+                embeddings=[embedding],
+                documents=[label],
+                metadatas=[{"image_path": image_path}],
+                ids=[label]
+            )
+
+# Initialize vector database on startup
+populate_vector_database()
 
 def load_documents():
     # Load both PDF and CSV documents
@@ -257,6 +282,36 @@ def detailed_match():
         print(f"Error: {e}")
         return jsonify({"error": "Internal server error"}), 500
 
+@app.route('/generate-image', methods=['POST'])
+def generate_image():
+    try:
+        data = request.json
+        query = data.get('query')
+        
+        if not query:
+            return jsonify({'error': 'No query provided'}), 400
+
+        # Compute embedding for the user query
+        query_embedding = embedder.encode(query).tolist()
+        
+        # Search for the most similar label
+        results = collection.query(query_embeddings=[query_embedding], n_results=1)
+        
+        if results["documents"]:
+            matched_label = results["documents"][0][0]
+            metadata = results["metadatas"][0][0]
+            image_path = metadata["image_path"]
+            
+            if os.path.exists(image_path):
+                return send_file(image_path, mimetype='image/jpeg')
+            else:
+                return jsonify({'error': 'Image not found'}), 404
+        else:
+            return jsonify({'error': 'No matching image found'}), 404
+
+    except Exception as e:
+        print(f"Error processing request: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
     chat_model = initialize_chat_model()

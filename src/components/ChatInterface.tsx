@@ -9,6 +9,8 @@ interface Message {
   id: number;
   text: string;
   sender: "user" | "bot";
+  type?: "text" | "image";
+  imageUrl?: string;
 }
 
 interface ChatInterfaceProps {
@@ -47,26 +49,52 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
     setIsLoading(true);
 
     try {
-      // For now, we'll use the existing chat endpoint
-      // Later, we can add logic to handle image generation when isImageMode is true
-      const response = await fetch("http://localhost:5000/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ question: input.trim() }),
-      });
+      if (isImageMode) {
+        const response = await fetch("http://localhost:5000/generate-image", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ query: input.trim() }),
+        });
 
-      if (!response.ok) throw new Error("Failed to get response");
+        if (!response.ok) {
+          throw new Error("Failed to generate image");
+        }
 
-      const data = await response.json();
-      const botMessage = {
-        id: Date.now() + 1,
-        text: data.answer || "Sorry, I couldn't process that request.",
-        sender: "bot" as const,
-      };
+        const blob = await response.blob();
+        const imageUrl = URL.createObjectURL(blob);
 
-      setMessages((prev) => [...prev, botMessage]);
+        const botMessage = {
+          id: Date.now() + 1,
+          text: "Here's the image you requested:",
+          sender: "bot" as const,
+          type: "image" as const,
+          imageUrl,
+        };
+
+        setMessages((prev) => [...prev, botMessage]);
+      } else {
+        const response = await fetch("http://localhost:5000/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ question: input.trim() }),
+        });
+
+        if (!response.ok) throw new Error("Failed to get response");
+
+        const data = await response.json();
+        const botMessage = {
+          id: Date.now() + 1,
+          text: data.answer || "Sorry, I couldn't process that request.",
+          sender: "bot" as const,
+          type: "text" as const,
+        };
+
+        setMessages((prev) => [...prev, botMessage]);
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -97,7 +125,6 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
 
   return (
     <div className="fixed bottom-4 right-4 w-[680px] h-[600px] bg-white rounded-lg shadow-xl flex flex-col animate-slideIn">
-      {/* Header */}
       <div className="p-4 border-b flex justify-between items-center bg-[#0056b3] text-white rounded-t-lg">
         <h2 className="font-semibold">SVECW Chat Assistant</h2>
         <div className="flex items-center gap-2">
@@ -122,7 +149,6 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Main Chat Area */}
         <div className="flex-1 flex flex-col">
           <ScrollArea className="flex-1 p-4">
             {messages.map((message) => (
@@ -140,6 +166,13 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
                   }`}
                 >
                   {message.text}
+                  {message.type === "image" && message.imageUrl && (
+                    <img 
+                      src={message.imageUrl} 
+                      alt="Generated" 
+                      className="mt-2 max-w-full rounded-lg"
+                    />
+                  )}
                 </div>
               </div>
             ))}
@@ -185,7 +218,6 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
           </form>
         </div>
 
-        {/* FAQ Sidebar */}
         <div className="w-64 border-l p-4 bg-gray-50">
           <h3 className="font-semibold mb-3">Sample Questions</h3>
           <div className="space-y-2">
