@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, X, FileText } from "lucide-react";
+import { Send, X, FileText, Image } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
@@ -20,6 +20,7 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isImageMode, setIsImageMode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -46,6 +47,8 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
     setIsLoading(true);
 
     try {
+      // For now, we'll use the existing chat endpoint
+      // Later, we can add logic to handle image generation when isImageMode is true
       const response = await fetch("http://localhost:5000/chat", {
         method: "POST",
         headers: {
@@ -75,6 +78,16 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
     }
   };
 
+  const toggleImageMode = () => {
+    setIsImageMode(!isImageMode);
+    toast({
+      title: isImageMode ? "Text Mode" : "Image Mode",
+      description: isImageMode 
+        ? "Switched to text responses" 
+        : "Switched to image generation mode",
+    });
+  };
+
   const sampleQuestions = [
     "Contact Information",
     "What about vishnu lms",
@@ -85,14 +98,14 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
   return (
     <div className="fixed bottom-4 right-4 w-[680px] h-[600px] bg-white rounded-lg shadow-xl flex flex-col animate-slideIn">
       {/* Header */}
-      <div className="p-4 border-b flex justify-between items-center bg-[#0EA5E9] text-white rounded-t-lg">
+      <div className="p-4 border-b flex justify-between items-center bg-[#0056b3] text-white rounded-t-lg">
         <h2 className="font-semibold">SVECW Chat Assistant</h2>
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
             size="icon"
             onClick={onResumeMatch}
-            className="hover:bg-[#0EA5E9]/80"
+            className="hover:bg-[#0056b3]/80"
             title="Resume Match"
           >
             <FileText className="h-5 w-5" />
@@ -101,7 +114,7 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
             variant="ghost"
             size="icon"
             onClick={onClose}
-            className="hover:bg-[#0EA5E9]/80"
+            className="hover:bg-[#0056b3]/80"
           >
             <X className="h-5 w-5" />
           </Button>
@@ -122,7 +135,7 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
                 <div
                   className={`p-3 rounded-lg max-w-[80%] ${
                     message.sender === "user"
-                      ? "bg-[#0EA5E9] text-white ml-auto"
+                      ? "bg-[#0056b3] text-white ml-auto"
                       : "bg-[#D3E4FD] text-gray-800"
                   }`}
                 >
@@ -145,15 +158,26 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Type your message..."
+                placeholder={isImageMode ? "Describe the image you want..." : "Type your message..."}
                 disabled={isLoading}
                 className="flex-1"
               />
               <Button
+                type="button"
+                size="icon"
+                onClick={toggleImageMode}
+                className={`${
+                  isImageMode ? "bg-[#0056b3]" : "bg-gray-200"
+                } hover:bg-[#0056b3]/80`}
+                title={isImageMode ? "Switch to text mode" : "Switch to image mode"}
+              >
+                <Image className={`h-4 w-4 ${isImageMode ? "text-white" : "text-gray-600"}`} />
+              </Button>
+              <Button
                 type="submit"
                 size="icon"
                 disabled={isLoading || !input.trim()}
-                className="bg-[#0EA5E9] hover:bg-[#0EA5E9]/80"
+                className="bg-[#0056b3] hover:bg-[#0056b3]/80"
               >
                 <Send className="h-4 w-4" />
               </Button>
