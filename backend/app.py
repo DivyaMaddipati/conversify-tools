@@ -17,6 +17,8 @@ import json
 from PIL import Image
 from sentence_transformers import SentenceTransformer
 import chromadb
+import time
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 app = Flask(__name__)
 CORS(app)
@@ -173,6 +175,15 @@ def initialize_qa_chain():
         chain_type_kwargs={"prompt": prompt}
     )
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=4, max=10),
+    reraise=True
+)
+def get_qa_response(question):
+    """Gets a response from the QA chain with retry logic."""
+    response = qa_chain.invoke({"query": question})
+    return response.get('result', 'I could not find an answer to your question.')
 
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -188,15 +199,22 @@ def chat():
         if qa_chain is None:
             initialize_qa_chain()
 
-        # Get response from QA chain
-        response = qa_chain.invoke({"query": question})
-        answer = response.get('result', 'I could not find an answer to your question.')
-
-        return jsonify({'answer': answer})
+        try:
+            # Get response from QA chain with retry logic
+            answer = get_qa_response(question)
+            return jsonify({'answer': answer})
+        except Exception as e:
+            return jsonify({
+                'error': 'Service temporarily unavailable. Please try again in a few moments.',
+                'details': str(e)
+            }), 503
 
     except Exception as e:
         print(f"Error processing request: {str(e)}")
-        return jsonify({'error': 'Internal server error'}), 500
+        return jsonify({
+            'error': 'An unexpected error occurred',
+            'details': str(e)
+        }), 500
     
 @app.route('/match', methods=['POST'])
 def match():
