@@ -100,7 +100,11 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
 
   const handleTranscription = (text: string) => {
     setInput(text);
-    handleSubmit(new Event('submit') as any);
+    // Create a synthetic event to simulate form submission
+    const syntheticEvent = {
+      preventDefault: () => {},
+    } as React.FormEvent;
+    handleSubmit(syntheticEvent);
   };
 
   const toggleImageMode = () => {
