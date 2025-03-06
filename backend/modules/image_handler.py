@@ -1,7 +1,7 @@
 from sentence_transformers import SentenceTransformer
 import chromadb
 import os
-from flask import send_file, jsonify
+from flask import send_file, jsonify, json
 
 class ImageHandler:
     def __init__(self):
@@ -47,8 +47,10 @@ class ImageHandler:
                 if os.path.exists(image_path):
                     return send_file(image_path, mimetype='image/jpeg')
                 else:
+                    print('Image not found')
                     return jsonify({'error': 'Image not found'}), 404
             else:
+                print('No matching image found')
                 return jsonify({'error': 'No matching image found'}), 404
 
         except Exception as e:

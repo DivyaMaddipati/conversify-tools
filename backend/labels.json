@@ -1,6 +1,7 @@
 {
-  "vishnu lms": "backend/images/lms.jpg",
-  "pratibha magazine": "backend/images/pratibha.jpg",
-  "contact information": "backend/images/contact.jpg",
-  "email id": "backend/images/email.jpg"
+  "academic calender 1st year": "backend/images/academic calender 1st year .jpg",
+  "academic calender 3rd year": "backend/images/academic calender 3rd year .jpg",
+  "acdemic  calender 2nd year": "backend/images/acdemic  calender 2nd year .jpg",
+  "examination schedule": "backend/images/examination schedule.jpg",
+  "list of holidays":"backend/images/list of holidays.jpg"
 }
