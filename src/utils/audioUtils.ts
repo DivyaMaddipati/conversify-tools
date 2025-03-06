@@ -28,10 +28,6 @@ export class AudioRecorder {
       this.mediaRecorder.onstop = () => {
         const audioBlob = new Blob(this.audioChunks, { type: 'audio/wav' });
         resolve(audioBlob);
-        
-        // Stop all tracks to release the microphone
-        const tracks = this.mediaRecorder?.stream.getTracks();
-        tracks?.forEach(track => track.stop());
       };
 
       this.mediaRecorder.stop();
@@ -44,7 +40,7 @@ export const convertBlobToBase64 = (blob: Blob): Promise<string> => {
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64String = reader.result as string;
-      resolve(base64String.split(',')[1]); // Remove the data URL prefix
+      resolve(base64String.split(',')[1]);
     };
     reader.onerror = reject;
     reader.readAsDataURL(blob);

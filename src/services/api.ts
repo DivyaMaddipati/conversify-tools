@@ -1,6 +1,5 @@
 export const transcribeAudio = async (audioBase64: string): Promise<string> => {
   try {
-    console.log('Sending audio data to backend for transcription');
     const response = await fetch('http://localhost:5000/transcribe-audio', {
       method: 'POST',
       headers: {
@@ -14,7 +13,6 @@ export const transcribeAudio = async (audioBase64: string): Promise<string> => {
     }
 
     const data = await response.json();
-    console.log('Transcription received:', data.transcript);
     return data.transcript;
   } catch (error) {
     console.error('Error transcribing audio:', error);

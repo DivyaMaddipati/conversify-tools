@@ -33,25 +33,11 @@ export const AudioRecordButton = ({ onTranscription }: AudioRecordButtonProps) =
     } else {
       try {
         const audioBlob = await audioRecorder.stopRecording();
-        setIsRecording(false);
-        
-        toast({
-          title: "Processing",
-          description: "Converting speech to text...",
-        });
-        
         const base64Audio = await convertBlobToBase64(audioBlob);
         const transcript = await transcribeAudio(base64Audio);
-        
-        if (transcript) {
-          onTranscription(transcript);
-          toast({
-            title: "Success",
-            description: "Speech converted to text",
-          });
-        }
+        onTranscription(transcript);
+        setIsRecording(false);
       } catch (error) {
-        console.error('Recording error:', error);
         toast({
           title: "Error",
           description: "Failed to process audio",
