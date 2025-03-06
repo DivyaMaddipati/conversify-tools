@@ -108,11 +108,6 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
     setInput(text);
     // Focus on the input field to show the transcribed text
     inputRef.current?.focus();
-    
-    // Automatically submit the transcribed text after a short delay
-    setTimeout(() => {
-      handleSubmit();
-    }, 500);
   };
 
   const toggleImageMode = () => {
