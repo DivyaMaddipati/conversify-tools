@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { Send, X, FileText, Image } from "lucide-react";
 import { Button } from "./ui/button";
@@ -5,6 +6,7 @@ import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { AudioRecordButton } from "./AudioRecordButton";
+import { AudioPlayButton } from "./AudioPlayButton";
 import { sendChatMessage } from "@/services/api";
 
 interface Message {
@@ -27,6 +29,7 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
   const [isImageMode, setIsImageMode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -36,8 +39,11 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
     scrollToBottom();
   }, [messages]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
+    
     if (!input.trim()) return;
 
     const userMessage = {
@@ -100,7 +106,13 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
 
   const handleTranscription = (text: string) => {
     setInput(text);
-    handleSubmit(new Event('submit') as any);
+    // Focus on the input field to show the transcribed text
+    inputRef.current?.focus();
+    
+    // Automatically submit the transcribed text after a short delay
+    setTimeout(() => {
+      handleSubmit();
+    }, 500);
   };
 
   const toggleImageMode = () => {
@@ -162,7 +174,13 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
                       : "bg-[#D3E4FD] text-gray-800"
                   }`}
                 >
-                  {message.text}
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="flex-1">{message.text}</div>
+                    {message.sender === "bot" && message.type === "text" && (
+                      <AudioPlayButton text={message.text} />
+                    )}
+                  </div>
+                  
                   {message.type === "image" && message.imageUrl && (
                     <img 
                       src={message.imageUrl} 
@@ -186,6 +204,7 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
           <form onSubmit={handleSubmit} className="p-4 border-t">
             <div className="flex gap-2">
               <Input
+                ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder={isImageMode ? "Describe the image you want..." : "Type your message..."}
