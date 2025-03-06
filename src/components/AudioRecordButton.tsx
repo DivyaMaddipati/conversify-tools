@@ -1,10 +1,10 @@
 
-import { useState, useEffect } from 'react';
-import { Mic, MicOff } from 'lucide-react';
-import { Button } from './ui/button';
-import { AudioRecorder, convertBlobToBase64 } from '@/utils/audioUtils';
-import { transcribeAudio } from '@/services/api';
-import { useToast } from '@/hooks/use-toast';
+import "regenerator-runtime/runtime";
+import { useState } from "react";
+import { Mic, MicOff } from "lucide-react";
+import { Button } from "./ui/button";
+import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
+import { useToast } from "@/hooks/use-toast";
 
 interface AudioRecordButtonProps {
   onTranscription: (text: string) => void;
@@ -12,23 +12,15 @@ interface AudioRecordButtonProps {
 
 export const AudioRecordButton = ({ onTranscription }: AudioRecordButtonProps) => {
   const [isRecording, setIsRecording] = useState(false);
-  const [audioRecorder] = useState(new AudioRecorder());
+  const { transcript, listening, resetTranscript } = useSpeechRecognition();
   const { toast } = useToast();
-  
-  useEffect(() => {
-    return () => {
-      // Clean up recording when component unmounts
-      if (isRecording) {
-        audioRecorder.stopRecording().catch(console.error);
-      }
-    };
-  }, [isRecording, audioRecorder]);
 
   const handleRecording = async () => {
     if (!isRecording) {
       try {
-        await audioRecorder.startRecording();
+        SpeechRecognition.startListening({ continuous: true, language: "en-US" });
         setIsRecording(true);
+        resetTranscript();
         toast({
           title: "Recording Started",
           description: "Speak now...",
@@ -43,22 +35,18 @@ export const AudioRecordButton = ({ onTranscription }: AudioRecordButtonProps) =
       }
     } else {
       try {
+        SpeechRecognition.stopListening();
         setIsRecording(false);
-        const audioBlob = await audioRecorder.stopRecording();
-        
         toast({
-          title: "Processing Audio",
-          description: "Transcribing your speech...",
+          title: "Processing",
+          description: "Converting speech to text...",
         });
-        
-        const base64Audio = await convertBlobToBase64(audioBlob);
-        const transcript = await transcribeAudio(base64Audio);
-        
-        if (transcript && transcript.trim()) {
+
+        if (transcript) {
           onTranscription(transcript);
           toast({
-            title: "Transcription Complete",
-            description: "Your speech has been converted to text",
+            title: "Success",
+            description: "Speech converted to text",
           });
         } else {
           toast({
@@ -68,10 +56,10 @@ export const AudioRecordButton = ({ onTranscription }: AudioRecordButtonProps) =
           });
         }
       } catch (error) {
-        console.error("Audio processing error:", error);
+        console.error("Recording error:", error);
         toast({
           title: "Error",
-          description: "Failed to process audio. Please try again.",
+          description: "Failed to process speech",
           variant: "destructive",
         });
         setIsRecording(false);
