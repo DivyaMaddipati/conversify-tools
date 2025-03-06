@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Upload, ArrowLeft, Percent } from "lucide-react";
 import { Button } from "./ui/button";
@@ -29,6 +30,7 @@ export const ResumeMatch = ({ onBack }: ResumeMatchProps) => {
   const [similarity, setSimilarity] = useState<number | null>(null);
   const [detailedFeedback, setDetailedFeedback] = useState<DetailedFeedback | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showMatchScore, setShowMatchScore] = useState(false);
   const { toast } = useToast();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -72,9 +74,11 @@ export const ResumeMatch = ({ onBack }: ResumeMatchProps) => {
       if (type === 'simple') {
         setSimilarity(data.similarity);
         setDetailedFeedback(null);
+        setShowMatchScore(true);
       } else {
         setDetailedFeedback(data);
-        setSimilarity(parseInt(data["JD Match"]));
+        // We're hiding the match score for detailed analysis
+        setShowMatchScore(false);
       }
     } catch (error) {
       toast({
@@ -155,7 +159,7 @@ export const ResumeMatch = ({ onBack }: ResumeMatchProps) => {
             </Button>
           </div>
 
-          {similarity !== null && (
+          {showMatchScore && similarity !== null && (
             <div className="mt-6 p-4 bg-[#D3E4FD]/30 rounded-lg">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-[#0EA5E9]">Match Score:</span>
