@@ -1,21 +1,45 @@
-from flask import jsonify
+
 import PyPDF2 as pdf
 import google.generativeai as genai
 import json
+from flask import jsonify
+
+# Configure Google AI API
+GOOGLE_API_KEY = "AIzaSyCcWfA5IhzK1hZkr5gONwvALAsYN5hOZu8"
+genai.configure(api_key=GOOGLE_API_KEY)
+
+# Correct model name
+MODEL_NAME = 'gemini-1.5-pro'
 
 def extract_pdf_text(file):
     """Extracts text from an uploaded PDF file."""
     reader = pdf.PdfReader(file)
-    text = ""
-    for page in reader.pages:
-        text += page.extract_text()
-    return text
+    text = "".join(page.extract_text() or "" for page in reader.pages)
+    return text.strip()
 
 def get_gemini_response(prompt):
     """Gets a response from the Gemini API."""
-    model = genai.GenerativeModel('gemini-pro')
-    response = model.generate_content(prompt)
-    return response.text
+    try:
+        model = genai.GenerativeModel(MODEL_NAME)
+        response = model.generate_content(
+            prompt, 
+            generation_config={"temperature": 0.3}  # Controls randomness
+        )
+
+        raw_text = response.text.strip()
+
+        # Remove markdown formatting (like ```json ... ```)
+        if raw_text.startswith("```json"):
+            raw_text = raw_text[7:-3].strip()
+
+        try:
+            return json.loads(raw_text)  # Ensure proper JSON format
+        except json.JSONDecodeError:
+            print("⚠️ Gemini AI returned an invalid response:", raw_text)
+            return None
+    except Exception as e:
+        print(f"❌ Gemini API Error: {str(e)}")
+        return None
 
 def handle_resume_match(resume_file, job_description):
     """Handles quick resume match requests."""
@@ -24,21 +48,31 @@ def handle_resume_match(resume_file, job_description):
         resume_text = extract_pdf_text(resume_file)
         
         # Create prompt for matching percentage
-        matching_prompt = f"""
-        Hey Act Like a skilled or very experienced ATS. Your task is to evaluate the resume based on the given job description. 
-        Only provide the JD Match percentage as a response.
+        prompt = f"""
+        Act as a professional ATS system. Analyze the resume against the job description and provide ONLY a JSON response.
 
         Resume: {resume_text}
         Job Description: {job_description}
 
-        Provide response in the format:
-        {{"JD Match": "%"}}
+        Return ONLY valid JSON in the exact format below:
+        ```json
+        {{
+          "JD Match": "XX%"
+        }}
+        ```
+        Do not include explanations or extra text.
         """
 
-        response = get_gemini_response(matching_prompt)
-        response = response.split(':')[1].strip('}% ')
-        response = response[1:-2]
-        return jsonify({"similarity": int(response)})
+        response = get_gemini_response(prompt)
+        if response and "JD Match" in response:
+            match_score = response["JD Match"].replace("%", "")
+            try:
+                return jsonify({"similarity": int(match_score)})
+            except ValueError:
+                # If we can't convert to int, return as string
+                return jsonify({"similarity": match_score})
+        else:
+            return jsonify({"error": "AI response did not contain a valid match value"}), 400
 
     except Exception as e:
         print(f"Error: {e}")
@@ -51,33 +85,31 @@ def handle_detailed_match(resume_file, job_description):
         resume_text = extract_pdf_text(resume_file)
 
         # Create prompt for detailed feedback
-        feedback_prompt = f"""
-        Hey Act Like a skilled or very experienced ATS. Your task is to evaluate the resume based on the given job description. 
-        Provide detailed feedback including:
-        1. JD Match (%): Assign the percentage matching based on the Job Description (JD) and the resume provided.
-        2. Missing Keywords: Identify missing keywords with high accuracy and relevance to the JD.
-        3. Profile Summary: Summarize the profile's strengths and alignment with the JD.
-        4. Strengths: Highlight the key strengths of the candidate based on the resume.
-        5. Weaknesses: Point out weaknesses or areas that need improvement based on the JD.
-        6. Recommend Courses & Resources: Suggest relevant courses or resources to improve the profile and match the JD better.
+        prompt = f"""
+        Act as a highly skilled ATS system. Analyze the resume against the job description and return a detailed analysis in JSON format.
 
         Resume: {resume_text}
         Job Description: {job_description}
 
-        Provide the response in this format:
+        Return ONLY valid JSON, structured exactly like this:
+        ```json
         {{
-          "JD Match": "%",
-          "Missing Keywords": [],
-          "Profile Summary": "",
-          "Strengths": "",
-          "Weaknesses": "",
-          "Recommend Courses & Resources": ""
+          "JD Match": "XX%",
+          "Missing Keywords": ["keyword1", "keyword2"],
+          "Profile Summary": "Summarized analysis of the resume...",
+          "Strengths": "Key strengths of the candidate...",
+          "Weaknesses": "Areas where the resume could be improved...",
+          "Recommend Courses & Resources": "Suggested courses and materials..."
         }}
+        ```
+        Do not include any explanations, just the raw JSON response.
         """
 
-        response = get_gemini_response(feedback_prompt)
-        feedback = json.loads(response)
-        return jsonify(feedback)
+        response = get_gemini_response(prompt)
+        if response and isinstance(response, dict):
+            return jsonify(response)
+        else:
+            return jsonify({"error": "AI response did not return a valid JSON object"}), 400
 
     except Exception as e:
         print(f"Error: {e}")

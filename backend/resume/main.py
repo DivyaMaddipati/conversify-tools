@@ -1,100 +1,119 @@
+
 import streamlit as st
 import google.generativeai as genai
-import os
 import PyPDF2 as pdf
-from dotenv import load_dotenv
 import json
+from dotenv import load_dotenv
+import os
 
-# Load environment variables
+# Load environment variables (if available)
 load_dotenv()
 
-# Configure Google Generative AI
-try:
-    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-except Exception as e:
-    st.error("Failed to configure Generative AI. Please check your API key.")
+# Configure Google AI API
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "AIzaSyCcWfA5IhzK1hZkr5gONwvALAsYN5hOZu8")
+genai.configure(api_key=GOOGLE_API_KEY)
 
-# Function to interact with the Gemini API
-def get_gemini_response(input_text):
-    model = genai.GenerativeModel('gemini-pro')
-    response = model.generate_content(input_text)
-    return response.text
+# Correct model name
+MODEL_NAME = 'gemini-1.5-pro'
 
 # Function to extract text from a PDF file
-def input_pdf_text(uploaded_file):
+def extract_pdf_text(uploaded_file):
     reader = pdf.PdfReader(uploaded_file)
-    text = ""
-    for page in range(len(reader.pages)):
-        page = reader.pages[page]
-        text += str(page.extract_text())
-    return text
+    text = "".join(page.extract_text() or "" for page in reader.pages)
+    return text.strip()
 
-# Streamlit app
-st.title("Smart ATS")
-st.text("Enhance Your Resume with ATS Insights")
+def get_gemini_response(prompt):
+    try:
+        model = genai.GenerativeModel(MODEL_NAME)
+        response = model.generate_content(
+            prompt, 
+            generation_config={"temperature": 0.3}  # Controls randomness
+        )
+
+        raw_text = response.text.strip()
+
+        # Remove markdown formatting (like ```json ... ```)
+        if raw_text.startswith("```json"):
+            raw_text = raw_text[7:-3].strip()
+
+        try:
+            return json.loads(raw_text)  # Ensure proper JSON format
+        except json.JSONDecodeError:
+            st.error("⚠️ Gemini AI returned an invalid response. Check raw response above.")
+            st.write("🔍 **Raw AI Response (after cleanup):**", raw_text)
+            return None
+    except Exception as e:
+        st.error(f"❌ Gemini API Error: {str(e)}")
+        return None
+
+# Streamlit UI Setup
+st.title("🔍 Smart ATS - Resume Matching System")
+st.text("Upload your resume and enter the job description to get ATS insights.")
 
 # Job Description Input
-jd = st.text_area("Paste the Job Description", help="Provide the job description for the role.")
+jd = st.text_area("📄 Paste Job Description", help="Provide the job description for the role.")
 
 # Resume Upload
-uploaded_file = st.file_uploader("Upload Your Resume", type="pdf", help="Upload your resume in PDF format.")
+uploaded_file = st.file_uploader("📂 Upload Resume (PDF)", type=["pdf"], help="Upload your resume in PDF format.")
 
-# Buttons for functionality
-if st.button("Get Matching Percentage"):
-    if uploaded_file is not None and jd:
-        resume_text = input_pdf_text(uploaded_file)
-        matching_prompt = f"""
-        Hey Act Like a skilled or very experienced ATS. Your task is to evaluate the resume based on the given job description. 
-        Only provide the JD Match percentage as a response.
+if uploaded_file and jd:
+    resume_text = extract_pdf_text(uploaded_file)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("📊 Get Matching Percentage"):
+            prompt = f"""
+            Act as a professional ATS system. Analyze the resume against the job description and provide ONLY a JSON response.
 
-        Resume: {resume_text}
-        Job Description: {jd}
+            Resume: {resume_text}
+            Job Description: {jd}
 
-        Provide response in the format:
-        {{"JD Match": "%"}}
-        """
-        try:
-            response = get_gemini_response(matching_prompt)
-            st.subheader("Matching Percentage")
-            st.write(response)
-        except Exception as e:
-            st.error("Failed to process the request. Please try again later.")
-    else:
-        st.warning("Please upload a resume and provide a job description.")
+            Return ONLY valid JSON in the exact format below:
+            ```json
+            {{
+              "JD Match": "XX%"
+            }}
+            ```
+            Do not include explanations or extra text.
+            """
+            response = get_gemini_response(prompt)
+            if response and "JD Match" in response:
+                match_score = response["JD Match"]
+                st.subheader(f"✅ Match Score: {match_score}")
+            else:
+                st.error("⚠️ AI response did not contain a valid 'JD Match' value.")
+    
+    with col2:
+        if st.button("📝 Get Detailed Feedback"):
+            prompt = f"""
+            Act as a highly skilled ATS system. Analyze the resume against the job description and return a detailed analysis in JSON format.
 
-if st.button("Get Detailed Feedback"):
-    if uploaded_file is not None and jd:
-        resume_text = input_pdf_text(uploaded_file)
-        feedback_prompt = f"""
-        Hey Act Like a skilled or very experienced ATS. Your task is to evaluate the resume based on the given job description. 
-        Provide detailed feedback including:
-        1. JD Match (%): Assign the percentage matching based on the Job Description (JD) and the resume provided.
-        2. Missing Keywords: Identify missing keywords with high accuracy and relevance to the JD.
-        3. Profile Summary: Summarize the profile's strengths and alignment with the JD.
-        4. Strengths: Highlight the key strengths of the candidate based on the resume.
-        5. Weaknesses: Point out weaknesses or areas that need improvement based on the JD.
-        6. Recommend Courses & Resources: Suggest relevant courses or resources to improve the profile and match the JD better.
+            Resume: {resume_text}
+            Job Description: {jd}
 
-        Resume: {resume_text}
-        Job Description: {jd}
+            Return ONLY valid JSON, structured exactly like this:
+            ```json
+            {{
+              "JD Match": "XX%",
+              "Missing Keywords": ["keyword1", "keyword2"],
+              "Profile Summary": "Summarized analysis of the resume...",
+              "Strengths": "Key strengths of the candidate...",
+              "Weaknesses": "Areas where the resume could be improved...",
+              "Recommend Courses & Resources": "Suggested courses and materials..."
+            }}
+            ```
+            Do not include any explanations, just the raw JSON response.
+            """
+            response = get_gemini_response(prompt)
+            if response and isinstance(response, dict):
+                st.subheader("📊 Resume Analysis Report")
+                st.write("🔹 **Match Score**: ", response.get("JD Match", "N/A"))
+                st.write("🔹 **Missing Keywords**: ", ", ".join(response.get("Missing Keywords", [])))
+                st.write("🔹 **Profile Summary**: ", response.get("Profile Summary", "N/A"))
+                st.write("🔹 **Strengths**: ", response.get("Strengths", "N/A"))
+                st.write("🔹 **Weaknesses**: ", response.get("Weaknesses", "N/A"))
+                st.write("🔹 **Recommended Courses & Resources**: ", response.get("Recommend Courses & Resources", "N/A"))
+            else:
+                st.error("⚠️ AI response did not return a valid JSON object.")
 
-        Provide the response in this format:
-        {{
-          "JD Match": "%",
-          "Missing Keywords": [],
-          "Profile Summary": "",
-          "Strengths": "",
-          "Weaknesses": "",
-          "Recommend Courses & Resources": ""
-        }}
-        """
-        try:
-            response = get_gemini_response(feedback_prompt)
-            st.subheader("Detailed Feedback")
-            st.write(response)
-        except Exception as e:
-            st.error("Failed to process the request. Please try again later.")
-    else:
-        st.warning("Please upload a resume and provide a job description.")
-
-st.text("\nPowered by Google Generative AI")
+st.text("Powered by Google Generative AI 🤖")
