@@ -1,7 +1,8 @@
+
 from sentence_transformers import SentenceTransformer
 import chromadb
 import os
-from flask import send_file, jsonify, json
+from flask import send_file, jsonify, json, current_app
 
 class ImageHandler:
     def __init__(self):
@@ -39,20 +40,27 @@ class ImageHandler:
             # Search for the most similar label
             results = self.collection.query(query_embeddings=[query_embedding], n_results=1)
             
-            if results["documents"]:
+            if results["documents"] and len(results["documents"][0]) > 0:
                 matched_label = results["documents"][0][0]
                 metadata = results["metadatas"][0][0]
                 image_path = metadata["image_path"]
                 
-                if os.path.exists(image_path):
-                    return send_file(image_path, mimetype='image/jpeg')
+                # Get absolute path to the image
+                # Handle relative paths from the backend directory
+                backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                absolute_path = os.path.join(backend_dir, os.path.relpath(image_path, "backend"))
+                
+                print(f"Looking for image at: {absolute_path}")
+                
+                if os.path.exists(absolute_path):
+                    return send_file(absolute_path, mimetype='image/jpeg')
                 else:
-                    print('Image not found')
-                    return jsonify({'error': 'Image not found'}), 404
+                    print(f'Image not found at path: {absolute_path}')
+                    return jsonify({'error': f'Image not found at path: {absolute_path}'}), 404
             else:
-                print('No matching image found')
+                print('No matching image found for query:', query)
                 return jsonify({'error': 'No matching image found'}), 404
 
         except Exception as e:
             print(f"Error processing request: {str(e)}")
-            return jsonify({'error': 'Internal server error'}), 500
+            return jsonify({'error': f'Internal server error: {str(e)}'}), 500

@@ -1,7 +1,8 @@
+
 {
-  "academic calender 1st year": "backend/images/academic calender 1st year .jpg",
-  "academic calender 3rd year": "backend/images/academic calender 3rd year .jpg",
-  "acdemic  calender 2nd year": "backend/images/acdemic  calender 2nd year .jpg",
-  "examination schedule": "backend/images/examination schedule.jpg",
-  "list of holidays":"backend/images/list of holidays.jpg"
+  "academic calender 1st year": "images/academic calender 1st year .jpg",
+  "academic calender 3rd year": "images/academic calender 3rd year .jpg",
+  "acdemic  calender 2nd year": "images/acdemic  calender 2nd year .jpg",
+  "examination schedule": "images/examination schedule.jpg",
+  "list of holidays": "images/list of holidays.jpg"
 }
