@@ -104,9 +104,18 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
   };
 
   const handleTranscription = (text: string) => {
-    setInput(text);
-    // Focus on the input field to show the transcribed text
-    inputRef.current?.focus();
+    if (text && text.trim().length > 0) {
+      console.log("Received transcription:", text);
+      setInput(text);
+      // Focus on the input field to show the transcribed text
+      inputRef.current?.focus();
+    } else {
+      toast({
+        title: "Empty Transcription",
+        description: "No speech was detected. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const toggleImageMode = () => {
