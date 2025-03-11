@@ -8,9 +8,13 @@ import { useToast } from "@/hooks/use-toast";
 
 interface AudioRecordButtonProps {
   onTranscription: (text: string) => void;
+  onLiveTranscript?: (text: string) => void;
 }
 
-export const AudioRecordButton = ({ onTranscription }: AudioRecordButtonProps) => {
+export const AudioRecordButton = ({ 
+  onTranscription, 
+  onLiveTranscript 
+}: AudioRecordButtonProps) => {
   const [isRecording, setIsRecording] = useState(false);
   const { toast } = useToast();
   
@@ -28,6 +32,13 @@ export const AudioRecordButton = ({ onTranscription }: AudioRecordButtonProps) =
       console.warn("Browser doesn't support speech recognition.");
     }
   }, [browserSupportsSpeechRecognition]);
+
+  // Send live transcript updates to parent component
+  useEffect(() => {
+    if (isRecording && onLiveTranscript && transcript) {
+      onLiveTranscript(transcript);
+    }
+  }, [transcript, isRecording, onLiveTranscript]);
 
   // Reset transcript when recording stops
   useEffect(() => {

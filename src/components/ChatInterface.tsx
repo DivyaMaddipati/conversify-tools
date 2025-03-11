@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { Send, X, FileText, Image } from "lucide-react";
 import { Button } from "./ui/button";
@@ -6,6 +7,7 @@ import { ScrollArea } from "./ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { AudioRecordButton } from "./AudioRecordButton";
 import { AudioPlayButton } from "./AudioPlayButton";
+import { LiveTranscription } from "./LiveTranscription";
 import { sendChatMessage } from "@/services/api";
 
 interface Message {
@@ -26,6 +28,8 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isImageMode, setIsImageMode] = useState(false);
+  const [liveTranscript, setLiveTranscript] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -107,6 +111,8 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
     if (text && text.trim().length > 0) {
       console.log("Received transcription:", text);
       setInput(text);
+      setLiveTranscript("");
+      setIsRecording(false);
       // Focus on the input field to show the transcribed text
       inputRef.current?.focus();
     } else {
@@ -116,6 +122,11 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
         variant: "destructive",
       });
     }
+  };
+
+  const handleLiveTranscript = (text: string) => {
+    setLiveTranscript(text);
+    setIsRecording(true);
   };
 
   const toggleImageMode = () => {
@@ -204,6 +215,14 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
             <div ref={messagesEndRef} />
           </ScrollArea>
 
+          {/* Live transcription component */}
+          <div className="px-4">
+            <LiveTranscription 
+              transcript={liveTranscript} 
+              isRecording={isRecording} 
+            />
+          </div>
+
           <form onSubmit={handleSubmit} className="p-4 border-t">
             <div className="flex gap-2">
               <Input
@@ -214,7 +233,10 @@ export const ChatInterface = ({ onClose, onResumeMatch }: ChatInterfaceProps) =>
                 disabled={isLoading}
                 className="flex-1"
               />
-              <AudioRecordButton onTranscription={handleTranscription} />
+              <AudioRecordButton 
+                onTranscription={handleTranscription} 
+                onLiveTranscript={handleLiveTranscript}
+              />
               <Button
                 type="button"
                 size="icon"
